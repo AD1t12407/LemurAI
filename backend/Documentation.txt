@@ -1,0 +1,98 @@
+Recall AI Bot Service - Project Setup Guide
+📁 Project Structure
+recall-ai-service/
+│
+├── RecallAIBot.py         # Your RecallAI bot class (core functionality)
+├── main.py                # FastAPI application (web service) 
+├── requirements.txt       # Python dependencies
+└── .env                   # Environment variables (optional, for security)
+Recall AI Bot Service - Project Setup Guide
+📁 Project Structure
+recall-ai-service/
+│
+├── RecallAIBot.py         # Your RecallAI bot class (core functionality)
+├── main.py                # FastAPI application (web service) 
+├── requirements.txt       # Python dependencies
+└── .env                   # Environment variables (optional, for security)
+🚀 Setup Instructions
+1. Create Project Directory
+bashmkdir recall-ai-service
+cd recall-ai-service
+2. Create Your Files
+
+Copy your RecallAIBot.py code
+Copy your main.py code
+
+3. Create requirements.txt
+Create a file called requirements.txt with this content:
+txtfastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+requests==2.31.0
+python-multipart==0.0.6
+How to create the file:
+bash# Using terminal
+touch requirements.txt
+nano requirements.txt
+# Paste the content above and save
+
+# OR use any text editor and save as requirements.txt
+4. Install Dependencies
+bashpip install -r requirements.txt
+5. Run Your Service
+bashpython main.py
+6. Test Your API
+Visit: http://localhost:8000/docs
+🧪 Quick Test
+bashcurl -X POST "http://localhost:8000/create-bot" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "meeting_url": "https://meet.google.com/your-meeting-url",
+       "api_key": "your-recall-ai-api-key",
+       "bot_name": "Test Bot"
+     }'
+📚 Available Endpoints
+Core Endpoints:
+
+POST /create-bot - Create a new recording bot
+GET /bot/{bot_id}/status - Check bot status
+GET /bot/{bot_id}/download-urls - Get download links
+DELETE /bot/{bot_id} - Remove bot from tracking
+GET /bots - List all active bots
+
+Utility Endpoints:
+
+GET / - Service information
+GET /health - Health check
+GET /docs - Interactive documentation
+
+🔒 Security (Optional)
+Create .env file:
+bashRECALL_API_KEY=your-actual-api-key-here
+Install and use:
+bashpip install python-dotenv
+pythonimport os
+from dotenv import load_dotenv
+load_dotenv()
+api_key = os.getenv("RECALL_API_KEY")
+🛠️ Common Commands
+Development Mode:
+bashpython main.py
+Custom Port:
+bashuvicorn main:app --host 0.0.0.0 --port 8080 --reload
+Production Mode:
+bashuvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
+🐛 Troubleshooting
+Import Error:
+
+Ensure RecallAIBot.py is in same directory as main.py
+Check filename spelling and capitalization
+
+Port in Use:
+bashsudo lsof -ti:8000 | xargs kill -9
+# Or use different port: uvicorn main:app --port 8001
+API Key Issues:
+
+Verify your Recall AI API key is valid
+Check you have sufficient credits
+Ensure no extra spaces in the key
