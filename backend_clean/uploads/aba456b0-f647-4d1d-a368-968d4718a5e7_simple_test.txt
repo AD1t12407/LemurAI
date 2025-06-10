@@ -1,0 +1,1 @@
+This is a simple test document for the Lemur platform. It should be processed successfully.

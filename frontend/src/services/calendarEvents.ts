@@ -36,6 +36,23 @@ export class CalendarEventsService {
     };
   }
 
+  // Convert Recall AI meeting format to local CalendarEvent
+  private static recallApiToLocal(recallMeeting: any): CalendarEvent {
+    return {
+      id: recallMeeting.id,
+      title: recallMeeting.title,
+      description: recallMeeting.description || '',
+      startTime: new Date(recallMeeting.start_time),
+      endTime: new Date(recallMeeting.end_time),
+      attendees: recallMeeting.attendees || [],
+      meetingLink: recallMeeting.meeting_url || '',
+      location: recallMeeting.location || '',
+      userId: recallMeeting.user_id || 'unknown',
+      createdAt: new Date(recallMeeting.start_time), // Use start_time as created_at
+      updatedAt: new Date(recallMeeting.start_time)  // Use start_time as updated_at
+    };
+  }
+
   // Convert local CalendarEvent to API request
   private static localToApi(event: Partial<CalendarEvent>): CalendarEventRequest {
     return {
@@ -210,7 +227,9 @@ export class CalendarEventsService {
     try {
       const response = await ApiService.get(`/calendar/upcoming/${userId}?limit=${limit}`);
 
-      const events = response.data.meetings.map(this.apiToLocal);
+      // Handle both old format (meetings) and new format (upcoming_meetings)
+      const meetingsData = response.data.upcoming_meetings || response.data.meetings || [];
+      const events = meetingsData.map(this.recallApiToLocal);
 
       // Update local cache
       events.forEach(event => {
@@ -233,7 +252,9 @@ export class CalendarEventsService {
     try {
       const response = await ApiService.get(`/calendar/previous/${userId}?limit=${limit}`);
 
-      const events = response.data.meetings.map(this.apiToLocal);
+      // Handle both old format (meetings) and new format (previous_meetings)
+      const meetingsData = response.data.previous_meetings || response.data.meetings || [];
+      const events = meetingsData.map(this.recallApiToLocal);
 
       // Update local cache
       events.forEach(event => {
@@ -258,21 +279,46 @@ export class CalendarEventsService {
     today: CalendarEvent[];
   }> {
     try {
+      console.log('🔄 Fetching categorized meetings for user:', userId);
+
       const [upcoming, previous] = await Promise.all([
         this.getUpcomingMeetings(userId, 20),
         this.getPreviousMeetings(userId, 20)
       ]);
 
-      // Get today's meetings
+      console.log('📅 Raw upcoming meetings:', upcoming.length);
+      console.log('📋 Raw previous meetings:', previous.length);
+
+      // Separate today's meetings from upcoming
       const today = new Date();
-      const todayEvents = this.getEventsForDate(userId, today);
+      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+
+      // Filter today's meetings from upcoming
+      const todayMeetings = upcoming.filter(meeting => {
+        const meetingDate = new Date(meeting.startTime);
+        return meetingDate >= todayStart && meetingDate <= todayEnd;
+      });
+
+      // Remove today's meetings from upcoming
+      const upcomingMeetings = upcoming.filter(meeting => {
+        const meetingDate = new Date(meeting.startTime);
+        return meetingDate > todayEnd;
+      });
+
+      console.log('📊 Categorized meetings:', {
+        upcoming: upcomingMeetings.length,
+        previous: previous.length,
+        today: todayMeetings.length
+      });
 
       return {
-        upcoming,
+        upcoming: upcomingMeetings,
         previous,
-        today: todayEvents
+        today: todayMeetings
       };
     } catch (error: any) {
+      console.error('❌ Error fetching categorized meetings:', error);
       const toast = useToastStore.getState();
       toast.error(
         'Failed to Load Meetings',
@@ -282,10 +328,12 @@ export class CalendarEventsService {
     }
   }
 
+
+
   // Get events for a date range
   static getEventsForDateRange(userId: string, startDate: Date, endDate: Date): CalendarEvent[] {
     const events = this.getCachedEvents(userId);
-    
+
     return events.filter(event => {
       return event.startTime >= startDate && event.startTime <= endDate;
     });

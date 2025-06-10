@@ -1,18 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Upload, File, Trash2, Plus, Building2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from './Button';
 import { Input } from './Input';
+import { LoadingSpinner } from './LoadingSpinner';
+import { useClientStore } from '../stores/clientStore';
 import { cn } from '../utils/cn';
-
-interface ClientFile {
-  id: string;
-  name: string;
-  size: number;
-  type: string;
-  uploadedAt: Date;
-  url?: string;
-}
 
 interface ClientModalProps {
   isOpen: boolean;
@@ -27,60 +20,69 @@ export const ClientModal: React.FC<ClientModalProps> = ({
   onSave,
   client
 }) => {
+  const { uploadFile, clientFiles, isLoading } = useClientStore();
+
   const [formData, setFormData] = useState({
     name: client?.name || '',
-    industry: client?.industry || '',
-    website: client?.website || '',
-    phone: client?.phone || '',
-    address: client?.address || '',
-    notes: client?.notes || '',
-    logo: client?.logo || ''
+    description: client?.description || ''
   });
 
-  const [contacts, setContacts] = useState(client?.contacts || [
-    { name: '', email: '', role: '', phone: '' }
-  ]);
-
-  const [files, setFiles] = useState<ClientFile[]>(client?.files || []);
   const [dragActive, setDragActive] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [clientId, setClientId] = useState(client?.id || null);
+
+  // Update form data when client changes
+  useEffect(() => {
+    if (client) {
+      setFormData({
+        name: client.name || '',
+        description: client.description || ''
+      });
+      setClientId(client.id);
+    } else {
+      setFormData({
+        name: '',
+        description: ''
+      });
+      setClientId(null);
+    }
+  }, [client]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleContactChange = (index: number, field: string, value: string) => {
-    const updatedContacts = [...contacts];
-    updatedContacts[index] = { ...updatedContacts[index], [field]: value };
-    setContacts(updatedContacts);
-  };
-
-  const addContact = () => {
-    setContacts([...contacts, { name: '', email: '', role: '', phone: '' }]);
-  };
-
-  const removeContact = (index: number) => {
-    if (contacts.length > 1) {
-      setContacts(contacts.filter((_, i) => i !== index));
+  const handleFileUpload = async (uploadedFiles: FileList | null) => {
+    if (!uploadedFiles || !clientId) {
+      // If no client ID yet, we need to create the client first
+      if (!clientId && formData.name.trim()) {
+        try {
+          // Create client first, then upload files
+          const clientData = {
+            name: formData.name,
+            description: formData.description
+          };
+          onSave(clientData);
+          // Files will be uploaded after client creation
+          return;
+        } catch (error) {
+          console.error('Failed to create client:', error);
+          return;
+        }
+      }
+      return;
     }
-  };
 
-  const handleFileUpload = (uploadedFiles: FileList | null) => {
-    if (!uploadedFiles) return;
-
-    const newFiles: ClientFile[] = Array.from(uploadedFiles).map(file => ({
-      id: Math.random().toString(36).substr(2, 9),
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      uploadedAt: new Date(),
-      url: URL.createObjectURL(file)
-    }));
-
-    setFiles(prev => [...prev, ...newFiles]);
-  };
-
-  const removeFile = (fileId: string) => {
-    setFiles(prev => prev.filter(f => f.id !== fileId));
+    setUploadingFiles(true);
+    try {
+      for (let i = 0; i < uploadedFiles.length; i++) {
+        await uploadFile(clientId, uploadedFiles[i]);
+      }
+    } catch (error) {
+      console.error('Failed to upload files:', error);
+    } finally {
+      setUploadingFiles(false);
+    }
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -109,16 +111,13 @@ export const ClientModal: React.FC<ClientModalProps> = ({
   };
 
   const handleSave = () => {
+    if (!formData.name.trim()) return;
+
     const clientData = {
-      ...formData,
-      contacts: contacts.filter(c => c.name || c.email),
-      files,
-      id: client?.id || Math.random().toString(36).substr(2, 9),
-      createdAt: client?.createdAt || new Date(),
-      updatedAt: new Date()
+      name: formData.name,
+      description: formData.description
     };
     onSave(clientData);
-    onClose();
   };
 
   if (!isOpen) return null;
@@ -174,49 +173,24 @@ export const ClientModal: React.FC<ClientModalProps> = ({
               {/* Basic Information */}
               <div>
                 <h3 className="text-lg font-medium mb-4" style={{ color: 'var(--text-primary)' }}>
-                  Basic Information
+                  Client Information
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-4">
                   <Input
-                    label="Company Name *"
+                    label="Client Name *"
                     value={formData.name}
                     onChange={(e) => handleInputChange('name', e.target.value)}
-                    placeholder="Enter company name"
+                    placeholder="Enter client organization name"
+                    required
                   />
-                  <Input
-                    label="Industry"
-                    value={formData.industry}
-                    onChange={(e) => handleInputChange('industry', e.target.value)}
-                    placeholder="e.g., Technology, Healthcare"
-                  />
-                  <Input
-                    label="Website"
-                    value={formData.website}
-                    onChange={(e) => handleInputChange('website', e.target.value)}
-                    placeholder="https://example.com"
-                  />
-                  <Input
-                    label="Phone"
-                    value={formData.phone}
-                    onChange={(e) => handleInputChange('phone', e.target.value)}
-                    placeholder="+1 (555) 123-4567"
-                  />
-                  <div className="md:col-span-2">
-                    <Input
-                      label="Address"
-                      value={formData.address}
-                      onChange={(e) => handleInputChange('address', e.target.value)}
-                      placeholder="Company address"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-primary)' }}>
-                      Notes
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
+                      Description
                     </label>
                     <textarea
-                      value={formData.notes}
-                      onChange={(e) => handleInputChange('notes', e.target.value)}
-                      placeholder="Additional notes about the client..."
+                      value={formData.description}
+                      onChange={(e) => handleInputChange('description', e.target.value)}
+                      placeholder="Brief description of the client organization..."
                       rows={3}
                       className="input w-full resize-none"
                     />
@@ -224,136 +198,102 @@ export const ClientModal: React.FC<ClientModalProps> = ({
                 </div>
               </div>
 
-              {/* Contacts */}
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-medium" style={{ color: 'var(--text-primary)' }}>
-                    Contacts
-                  </h3>
-                  <Button size="sm" onClick={addContact} leftIcon={<Plus className="h-4 w-4" />}>
-                    Add Contact
-                  </Button>
-                </div>
-                <div className="space-y-4">
-                  {contacts.map((contact, index) => (
-                    <div key={index} className="p-4 rounded-xl border" style={{ borderColor: 'var(--border-secondary)', background: 'var(--bg-secondary)' }}>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <Input
-                          placeholder="Full Name"
-                          value={contact.name}
-                          onChange={(e) => handleContactChange(index, 'name', e.target.value)}
-                        />
-                        <Input
-                          placeholder="Email"
-                          type="email"
-                          value={contact.email}
-                          onChange={(e) => handleContactChange(index, 'email', e.target.value)}
-                        />
-                        <Input
-                          placeholder="Role/Title"
-                          value={contact.role}
-                          onChange={(e) => handleContactChange(index, 'role', e.target.value)}
-                        />
-                        <div className="flex gap-2">
-                          <Input
-                            placeholder="Phone"
-                            value={contact.phone}
-                            onChange={(e) => handleContactChange(index, 'phone', e.target.value)}
-                            className="flex-1"
-                          />
-                          {contacts.length > 1 && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeContact(index)}
-                              className="text-red-500 hover:text-red-600"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
               {/* File Upload */}
-              <div>
-                <h3 className="text-lg font-medium mb-4" style={{ color: 'var(--text-primary)' }}>
-                  Client Files
-                </h3>
-                
-                {/* Upload Area */}
-                <div
-                  className={cn(
-                    "border-2 border-dashed rounded-xl p-8 text-center transition-colors",
-                    dragActive ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20" : "border-gray-300 dark:border-gray-600"
-                  )}
-                  onDragEnter={handleDrag}
-                  onDragLeave={handleDrag}
-                  onDragOver={handleDrag}
-                  onDrop={handleDrop}
-                >
-                  <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                  <p className="text-lg font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
-                    Drop files here or click to upload
-                  </p>
-                  <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
-                    Support for documents, images, and other file types
-                  </p>
-                  <input
-                    type="file"
-                    multiple
-                    onChange={(e) => handleFileUpload(e.target.files)}
-                    className="hidden"
-                    id="file-upload"
-                  />
-                  <label htmlFor="file-upload">
-                    <Button as="span" variant="outline">
-                      Choose Files
-                    </Button>
-                  </label>
-                </div>
+              {clientId && (
+                <div>
+                  <h3 className="text-lg font-medium mb-4" style={{ color: 'var(--text-primary)' }}>
+                    Knowledge Base Files
+                  </h3>
 
-                {/* File List */}
-                {files.length > 0 && (
-                  <div className="mt-6 space-y-2">
-                    <h4 className="font-medium" style={{ color: 'var(--text-primary)' }}>
-                      Uploaded Files ({files.length})
-                    </h4>
-                    <div className="space-y-2 max-h-40 overflow-y-auto">
-                      {files.map((file) => (
-                        <div
-                          key={file.id}
-                          className="flex items-center justify-between p-3 rounded-lg border"
-                          style={{ borderColor: 'var(--border-secondary)', background: 'var(--bg-secondary)' }}
-                        >
-                          <div className="flex items-center gap-3">
+                  <div className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Upload documents to build the knowledge base for this client.
+                    Supported formats: PDF, DOC, DOCX, TXT, MD
+                  </div>
+
+                  {/* Upload Area */}
+                  <div
+                    className={cn(
+                      "border-2 border-dashed rounded-xl p-8 text-center transition-colors",
+                      dragActive ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20" : "border-gray-300 dark:border-gray-600",
+                      uploadingFiles && "opacity-50 pointer-events-none"
+                    )}
+                    onDragEnter={handleDrag}
+                    onDragLeave={handleDrag}
+                    onDragOver={handleDrag}
+                    onDrop={handleDrop}
+                  >
+                    {uploadingFiles ? (
+                      <div className="flex flex-col items-center gap-4">
+                        <LoadingSpinner size="lg" />
+                        <p className="text-lg font-medium" style={{ color: 'var(--text-primary)' }}>
+                          Uploading and processing files...
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                        <p className="text-lg font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
+                          Drop files here or click to upload
+                        </p>
+                        <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
+                          PDF, DOC, DOCX, TXT, MD files supported
+                        </p>
+                        <input
+                          type="file"
+                          multiple
+                          accept=".pdf,.doc,.docx,.txt,.md"
+                          onChange={(e) => handleFileUpload(e.target.files)}
+                          className="hidden"
+                          id="file-upload"
+                          disabled={uploadingFiles}
+                        />
+                        <label htmlFor="file-upload">
+                          <Button as="span" variant="outline" disabled={uploadingFiles}>
+                            Choose Files
+                          </Button>
+                        </label>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Existing Files */}
+                  {clientId && clientFiles[clientId] && clientFiles[clientId].length > 0 && (
+                    <div className="mt-6 space-y-2">
+                      <h4 className="font-medium" style={{ color: 'var(--text-primary)' }}>
+                        Existing Files ({clientFiles[clientId].length})
+                      </h4>
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {clientFiles[clientId].map((file) => (
+                          <div
+                            key={file.id}
+                            className="flex items-center gap-3 p-3 rounded-lg border"
+                            style={{ borderColor: 'var(--border-secondary)', background: 'var(--bg-secondary)' }}
+                          >
                             <File className="h-5 w-5 text-gray-400" />
-                            <div>
-                              <p className="font-medium" style={{ color: 'var(--text-primary)' }}>
-                                {file.name}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                                {file.original_filename}
                               </p>
                               <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                                {formatFileSize(file.size)} • {file.uploadedAt.toLocaleDateString()}
+                                {(file.file_size / 1024).toFixed(1)} KB •
+                                {file.processed ? ' Processed' : ' Processing...'}
                               </p>
                             </div>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeFile(file.id)}
-                            className="text-red-500 hover:text-red-600"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
+
+              {!clientId && (
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <p className="text-sm text-blue-700 dark:text-blue-400">
+                    💡 Create the client first, then you can upload files to build their knowledge base.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

@@ -211,7 +211,7 @@ export const CRMSync: React.FC<CRMSyncProps> = ({ meetingId, className }) => {
                   </div>
                   <div className="flex items-center gap-4 text-sm text-dark-600 dark:text-dark-400">
                     <span className={getStatusColor(connection.status)}>
-                      {connection.status.charAt(0).toUpperCase() + connection.status.slice(1)}
+                      {connection.status ? (connection.status.charAt(0).toUpperCase() + connection.status.slice(1)) : 'Unknown'}
                     </span>
                     <span>•</span>
                     <span>Last sync: {connection.lastSync}</span>

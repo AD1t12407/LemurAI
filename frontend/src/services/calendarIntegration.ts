@@ -44,7 +44,7 @@ export class CalendarIntegrationService {
   // Initiate Google Calendar connection (NEW METHOD)
   static async connectGoogleCalendarNew(): Promise<string> {
     try {
-      const response = await ApiService.get('/auth/google/calendar');
+      const response = await ApiService.post('/calendar/connect/google', {});
 
       const toast = useToastStore.getState();
       toast.info(
@@ -52,7 +52,7 @@ export class CalendarIntegrationService {
         'Redirecting to Google for calendar authorization...'
       );
 
-      return response.data.authorization_url;
+      return response.data.oauth_url;
     } catch (error: any) {
       const toast = useToastStore.getState();
       toast.error(
@@ -107,28 +107,36 @@ export class CalendarIntegrationService {
   // Check calendar connection status
   static async checkConnectionStatus(userId: string): Promise<CalendarConnection> {
     try {
-      const response: CalendarConnectionStatus = await ApiService.getCalendarConnectionStatus(userId);
-      
+      const response = await ApiService.get(`/calendar/status/${userId}`);
+
       const connection: CalendarConnection = {
-        userId: response.user_id,
-        provider: 'google',
-        connected: response.connected,
-        lastSync: response.last_sync ? new Date(response.last_sync) : undefined,
+        userId: response.data.user_id,
+        provider: response.data.provider || 'google',
+        connected: response.data.google_calendar_connected,
+        lastSync: response.data.last_sync ? new Date(response.data.last_sync) : undefined,
       };
-      
+
       this.connections.set(userId, connection);
-      
+
+      const toast = useToastStore.getState();
+      if (connection.connected) {
+        toast.success(
+          'Calendar Connected',
+          `Your ${connection.provider} calendar is connected and syncing.`
+        );
+      }
+
       return connection;
     } catch (error: any) {
       console.error(`Failed to check calendar status for user ${userId}:`, error);
-      
+
       // Return default disconnected state
       const connection: CalendarConnection = {
         userId,
         provider: 'google',
         connected: false,
       };
-      
+
       this.connections.set(userId, connection);
       return connection;
     }

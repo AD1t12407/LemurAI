@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate, Link } from 'react-router-dom';
-import { Building2, Users, Calendar, Mail, Phone, Plus, Search, Filter, FileText } from 'lucide-react';
+import { Building2, Users, Calendar, Mail, Phone, Plus, Search, Filter, FileText, Upload } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../stores/authStore';
 import { useClientStore } from '../stores/clientStore';
@@ -8,51 +8,107 @@ import { Navbar } from '../components/Navbar';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { ClientModal } from '../components/ClientModal';
+import { Modal } from '../components/Modal';
+import { LoadingSpinner } from '../components/LoadingSpinner';
 import { cn } from '../utils/cn';
 
 export const Clients: React.FC = () => {
-  const { clients, addClient, updateClient, initializeClients } = useClientStore();
+  const { user } = useAuthStore();
+  const {
+    apiClients,
+    subClients,
+    clientFiles,
+    isLoading,
+    error,
+    fetchAPIClients,
+    createAPIClient,
+    updateAPIClient,
+    deleteAPIClient,
+    fetchSubClients,
+    uploadFile,
+    fetchFiles
+  } = useClientStore();
+
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedIndustry, setSelectedIndustry] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isFileModalOpen, setIsFileModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState(null);
+  const [selectedClientForFiles, setSelectedClientForFiles] = useState(null);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
 
   useEffect(() => {
     document.title = 'Clients | Lemur AI';
-    initializeClients();
-  }, [initializeClients]);
+    if (user) {
+      fetchAPIClients();
+    }
+  }, [user, fetchAPIClients]);
 
-  // Filter clients based on search and industry
-  const filteredClients = clients.filter(client => {
+  // Filter clients based on search
+  const filteredClients = apiClients.filter(client => {
     const matchesSearch = client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         client.contacts?.some(contact => 
-                           contact.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           contact.email.toLowerCase().includes(searchTerm.toLowerCase())
-                         );
-    const matchesIndustry = selectedIndustry === 'all' || client.industry === selectedIndustry;
-    return matchesSearch && matchesIndustry;
+                         (client.description && client.description.toLowerCase().includes(searchTerm.toLowerCase()));
+    return matchesSearch;
   });
 
-  // Get unique industries for filter
-  const industries = ['all', ...Array.from(new Set(clients.map(c => c.industry).filter(Boolean)))];
-
-  const handleSaveClient = (clientData: any) => {
-    if (editingClient) {
-      updateClient(editingClient.id, clientData);
-    } else {
-      addClient(clientData);
+  const handleSaveClient = async (clientData: any) => {
+    try {
+      if (editingClient) {
+        await updateAPIClient(editingClient.id, {
+          name: clientData.name,
+          description: clientData.description
+        });
+      } else {
+        await createAPIClient(clientData.name, clientData.description);
+      }
+      setEditingClient(null);
+      setIsModalOpen(false);
+    } catch (error) {
+      console.error('Failed to save client:', error);
     }
-    setEditingClient(null);
   };
 
-  const handleEditClient = (client: any) => {
+  const handleEditClient = async (client: any) => {
     setEditingClient(client);
     setIsModalOpen(true);
+    // Load sub-clients and files for this client
+    await fetchSubClients(client.id);
+    await fetchFiles(client.id);
+  };
+
+  const handleDeleteClient = async (clientId: string) => {
+    if (window.confirm('Are you sure you want to delete this client? This action cannot be undone.')) {
+      try {
+        await deleteAPIClient(clientId);
+      } catch (error) {
+        console.error('Failed to delete client:', error);
+      }
+    }
   };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingClient(null);
+  };
+
+  const handleFileUpload = async (files: FileList, clientId: string) => {
+    setUploadingFiles(true);
+    try {
+      for (let i = 0; i < files.length; i++) {
+        await uploadFile(clientId, files[i]);
+      }
+      // Refresh files for this client
+      await fetchFiles(clientId);
+      setIsFileModalOpen(false);
+    } catch (error) {
+      console.error('Failed to upload files:', error);
+    } finally {
+      setUploadingFiles(false);
+    }
+  };
+
+  const handleOpenFileModal = (client: any) => {
+    setSelectedClientForFiles(client);
+    setIsFileModalOpen(true);
   };
 
   const fadeIn = {
@@ -106,46 +162,48 @@ export const Clients: React.FC = () => {
             <div className="flex flex-1 gap-4">
               <div className="flex-1 max-w-md">
                 <Input
-                  placeholder="Search clients, contacts, or emails..."
+                  placeholder="Search clients by name or description..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   leftIcon={<Search className="h-4 w-4 text-gray-400" />}
                 />
               </div>
-              
-              <select
-                value={selectedIndustry}
-                onChange={(e) => setSelectedIndustry(e.target.value)}
-                className="input w-auto min-w-[150px]"
-              >
-                {industries.map(industry => (
-                  <option key={industry} value={industry}>
-                    {industry === 'all' ? 'All Industries' : industry}
-                  </option>
-                ))}
-              </select>
             </div>
           </div>
+
+          {/* Error Display */}
+          {error && (
+            <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+              <p className="text-red-700 dark:text-red-400">{error}</p>
+            </div>
+          )}
+
+          {/* Loading State */}
+          {isLoading && (
+            <div className="mt-8 flex justify-center">
+              <LoadingSpinner size="lg" />
+            </div>
+          )}
 
           {/* Stats */}
           <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-3">
             {[
               {
                 label: 'Total Clients',
-                value: clients.length,
+                value: apiClients.length,
                 icon: Building2,
                 color: 'blue'
               },
               {
-                label: 'Active Projects',
-                value: clients.reduce((acc, client) => acc + (client.meetings?.length || 0), 0),
-                icon: Calendar,
+                label: 'Sub-Clients',
+                value: Object.values(subClients).reduce((acc, subs) => acc + subs.length, 0),
+                icon: Users,
                 color: 'green'
               },
               {
-                label: 'Total Contacts',
-                value: clients.reduce((acc, client) => acc + (client.contacts?.length || 0), 0),
-                icon: Users,
+                label: 'Knowledge Files',
+                value: Object.values(clientFiles).reduce((acc, files) => acc + files.length, 0),
+                icon: FileText,
                 color: 'purple'
               }
             ].map((stat, index) => (
@@ -185,93 +243,83 @@ export const Clients: React.FC = () => {
           </div>
 
           {/* Clients Grid */}
-          <motion.div
-            className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3"
-            variants={staggerContainer}
-            initial="hidden"
-            animate="visible"
-          >
-            {filteredClients.map((client) => (
-              <motion.div
-                key={client.id}
-                className="card hover-lift cursor-pointer"
-                variants={fadeIn}
-                whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                onClick={() => handleEditClient(client)}
-              >
-                <div className="flex items-start gap-4">
-                  {client.logo ? (
-                    <img
-                      src={client.logo}
-                      alt={`${client.name} logo`}
-                      className="h-12 w-12 rounded-lg object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800">
-                      <Building2 className="h-6 w-6 text-gray-400" />
+          {!isLoading && (
+            <motion.div
+              className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3"
+              variants={staggerContainer}
+              initial="hidden"
+              animate="visible"
+            >
+              {filteredClients.map((client) => (
+                <motion.div
+                  key={client.id}
+                  className="card hover-lift"
+                  variants={fadeIn}
+                  whileHover={{ y: -4, transition: { duration: 0.2 } }}
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-purple-600">
+                      <Building2 className="h-6 w-6 text-white" />
                     </div>
-                  )}
-                  
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-                      {client.name}
-                    </h3>
-                    {client.industry && (
+
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                        {client.name}
+                      </h3>
                       <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                        {client.industry}
+                        Created: {new Date(client.created_at).toLocaleDateString()}
                       </p>
-                    )}
-                  </div>
-                </div>
-
-                {client.notes && (
-                  <p className="mt-3 text-sm line-clamp-2" style={{ color: 'var(--text-secondary)' }}>
-                    {client.notes}
-                  </p>
-                )}
-
-                <div className="mt-4 flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-4">
-                    <span className="flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
-                      <Users className="h-4 w-4" />
-                      {client.contacts?.length || 0} contacts
-                    </span>
-                    <span className="flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
-                      <Calendar className="h-4 w-4" />
-                      {client.meetings?.length || 0} meetings
-                    </span>
-                    <span className="flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
-                      <FileText className="h-4 w-4" />
-                      {client.files?.length || 0} files
-                    </span>
-                  </div>
-                </div>
-
-                {client.contacts && client.contacts.length > 0 && (
-                  <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--border-secondary)' }}>
-                    <div className="flex items-center gap-2">
-                      <div className="flex -space-x-2">
-                        {client.contacts.slice(0, 3).map((contact, index) => (
-                          <div
-                            key={contact.id}
-                            className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-medium border-2 border-white dark:border-gray-800"
-                            title={contact.name}
-                          >
-                            {contact.name.split(' ').map(n => n[0]).join('').toUpperCase()}
-                          </div>
-                        ))}
-                      </div>
-                      {client.contacts.length > 3 && (
-                        <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                          +{client.contacts.length - 3} more
-                        </span>
-                      )}
                     </div>
                   </div>
-                )}
-              </motion.div>
-            ))}
-          </motion.div>
+
+                  {client.description && (
+                    <p className="mt-3 text-sm line-clamp-2" style={{ color: 'var(--text-secondary)' }}>
+                      {client.description}
+                    </p>
+                  )}
+
+                  <div className="mt-4 flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-4">
+                      <span className="flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
+                        <Users className="h-4 w-4" />
+                        {subClients[client.id]?.length || 0} sub-clients
+                      </span>
+                      <span className="flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
+                        <FileText className="h-4 w-4" />
+                        {clientFiles[client.id]?.length || 0} files
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="mt-4 pt-4 border-t flex gap-2" style={{ borderColor: 'var(--border-secondary)' }}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditClient(client);
+                      }}
+                      className="flex-1"
+                    >
+                      View Details
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenFileModal(client);
+                      }}
+                      leftIcon={<Upload className="h-4 w-4" />}
+                    >
+                      Upload Files
+                    </Button>
+                  </div>
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
 
           {filteredClients.length === 0 && (
             <div className="mt-12 text-center">
@@ -280,8 +328,8 @@ export const Clients: React.FC = () => {
                 No clients found
               </h3>
               <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>
-                {searchTerm || selectedIndustry !== 'all' 
-                  ? 'Try adjusting your search or filter criteria.'
+                {searchTerm
+                  ? 'Try adjusting your search criteria.'
                   : 'Get started by adding your first client.'
                 }
               </p>
@@ -297,6 +345,99 @@ export const Clients: React.FC = () => {
         onSave={handleSaveClient}
         client={editingClient}
       />
+
+      {/* File Upload Modal */}
+      <Modal
+        isOpen={isFileModalOpen}
+        onClose={() => setIsFileModalOpen(false)}
+        title={`Upload Files - ${selectedClientForFiles?.name}`}
+        size="lg"
+      >
+        <div className="space-y-6">
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            Upload documents to build the knowledge base for {selectedClientForFiles?.name}.
+            Supported formats: PDF, DOC, DOCX, TXT, MD
+          </div>
+
+          {/* File Upload Area */}
+          <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center">
+            <input
+              type="file"
+              multiple
+              accept=".pdf,.doc,.docx,.txt,.md"
+              onChange={(e) => {
+                if (e.target.files && selectedClientForFiles) {
+                  handleFileUpload(e.target.files, selectedClientForFiles.id);
+                }
+              }}
+              className="hidden"
+              id="file-upload"
+            />
+            <label
+              htmlFor="file-upload"
+              className="cursor-pointer flex flex-col items-center gap-4"
+            >
+              <Upload className="h-12 w-12 text-gray-400" />
+              <div>
+                <p className="text-lg font-medium text-gray-900 dark:text-white">
+                  Click to upload files
+                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  or drag and drop files here
+                </p>
+              </div>
+            </label>
+          </div>
+
+          {/* Existing Files */}
+          {selectedClientForFiles && clientFiles[selectedClientForFiles.id] && (
+            <div>
+              <h4 className="font-medium text-gray-900 dark:text-white mb-3">
+                Existing Files ({clientFiles[selectedClientForFiles.id].length})
+              </h4>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {clientFiles[selectedClientForFiles.id].map((file) => (
+                  <div
+                    key={file.id}
+                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
+                  >
+                    <FileText className="h-5 w-5 text-gray-400" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                        {file.original_filename}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {(file.file_size / 1024).toFixed(1)} KB •
+                        {file.processed ? ' Processed' : ' Processing...'}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Upload Status */}
+          {uploadingFiles && (
+            <div className="flex items-center gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <LoadingSpinner size="sm" />
+              <span className="text-sm text-blue-700 dark:text-blue-400">
+                Uploading and processing files...
+              </span>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setIsFileModalOpen(false)}
+              disabled={uploadingFiles}
+            >
+              Close
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

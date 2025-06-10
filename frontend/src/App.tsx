@@ -12,6 +12,9 @@ import { SignUp } from './pages/SignUp';
 import { Dashboard } from './pages/Dashboard';
 import { Meetings } from './pages/Meetings';
 import { MeetingDetails } from './pages/MeetingDetails';
+import { UpcomingMeetingDetails } from './pages/UpcomingMeetingDetails';
+import { TestUpcomingMeeting } from './pages/TestUpcomingMeeting';
+import { MeetingIntelligenceDemo } from './pages/MeetingIntelligenceDemo';
 import { Clients } from './pages/Clients';
 import { Settings } from './pages/Settings';
 import { ApiTest } from './pages/ApiTest';
@@ -75,7 +78,17 @@ function App() {
             <Dashboard />
           </ProtectedRoute>
         } />
+        <Route path="/production" element={
+          <ProtectedRoute>
+            <Dashboard production={true} />
+          </ProtectedRoute>
+        } />
         <Route path="/meetings" element={
+          <ProtectedRoute>
+            <Meetings />
+          </ProtectedRoute>
+        } />
+        <Route path="/calendar" element={
           <ProtectedRoute>
             <Meetings />
           </ProtectedRoute>
@@ -83,6 +96,11 @@ function App() {
         <Route path="/meetings/:id" element={
           <ProtectedRoute>
             <MeetingDetails />
+          </ProtectedRoute>
+        } />
+        <Route path="/meeting/upcoming/:id" element={
+          <ProtectedRoute>
+            <UpcomingMeetingDetails />
           </ProtectedRoute>
         } />
         <Route path="/clients" element={
@@ -98,6 +116,16 @@ function App() {
         <Route path="/api-test" element={
           <ProtectedRoute>
             <ApiTest />
+          </ProtectedRoute>
+        } />
+        <Route path="/test-upcoming" element={
+          <ProtectedRoute>
+            <TestUpcomingMeeting />
+          </ProtectedRoute>
+        } />
+        <Route path="/meeting-intelligence-demo" element={
+          <ProtectedRoute>
+            <MeetingIntelligenceDemo />
           </ProtectedRoute>
         } />
 

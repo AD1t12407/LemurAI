@@ -309,7 +309,7 @@ export const MeetingEditModal: React.FC<MeetingEditModalProps> = ({
                 >
                   <div className="flex items-center gap-3">
                     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">
-                      {attendee.name.charAt(0).toUpperCase()}
+                      {attendee.name ? attendee.name.charAt(0).toUpperCase() : '?'}
                     </div>
                     <div>
                       <p className="text-sm font-medium text-dark-900 dark:text-dark-50">

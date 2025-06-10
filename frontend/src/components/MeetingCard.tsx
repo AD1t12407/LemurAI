@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, Video, Users, ExternalLink, Play, Save, X, Plus } from 'lucide-react';
+import { Calendar, Clock, Video, Users, ExternalLink, Play, Save, X, Plus, Brain } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Meeting } from '../types';
+import { RealMeeting } from '../services/realMeetings';
 import { cn } from '../utils/cn';
 import { formatDate, formatTime, getMeetingDuration } from '../utils/date-utils';
 import { joinMeeting } from '../utils/button-actions';
@@ -12,12 +13,19 @@ import { OverlayEditModal, EditFormWrapper, FormSection, FormActions, InputGroup
 import { useToastStore } from '../stores/toastStore';
 
 interface MeetingCardProps {
-  meeting: Meeting;
+  meeting: Meeting | RealMeeting;
   className?: string;
 }
 
 export const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, className }) => {
   const { id, title, date, startTime, endTime, attendees, status, platform } = meeting;
+
+  // Handle both Meeting and RealMeeting types
+  const meetingLink = (meeting as Meeting).meetingLink || '';
+  const description = (meeting as Meeting).description || (meeting as RealMeeting).summary || '';
+  const isRealMeeting = 'hasAIContent' in meeting;
+  const hasAIContent = (meeting as RealMeeting).hasAIContent || false;
+  const hasVideo = (meeting as RealMeeting).hasVideo || false;
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -26,8 +34,8 @@ export const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, className }) 
     startTime: new Date(startTime).toTimeString().slice(0, 5),
     endTime: new Date(endTime).toTimeString().slice(0, 5),
     platform: platform || 'zoom',
-    meetingLink: meeting.meetingLink || '',
-    description: meeting.description || '',
+    meetingLink: meetingLink,
+    description: description,
     status: status,
   });
   const [attendeesList, setAttendeesList] = useState(attendees);
@@ -179,7 +187,7 @@ export const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, className }) 
             'rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap flex-shrink-0 animate-scale-in shadow-sm',
             statusColors[status]
           )}>
-            {status.replace('_', ' ').charAt(0).toUpperCase() + status.replace('_', ' ').slice(1)}
+            {status ? (status.replace('_', ' ').charAt(0).toUpperCase() + status.replace('_', ' ').slice(1)) : 'Unknown'}
           </span>
         </div>
 
@@ -210,6 +218,24 @@ export const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, className }) 
               {attendees.length} participant{attendees.length !== 1 ? 's' : ''}
             </span>
           </div>
+
+          {/* AI Content Indicators */}
+          {isRealMeeting && (
+            <div className="flex items-center gap-2 text-xs">
+              {hasVideo && (
+                <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-full dark:bg-blue-900/30 dark:text-blue-300">
+                  <Video className="h-3 w-3" />
+                  Video
+                </span>
+              )}
+              {hasAIContent && (
+                <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 rounded-full dark:bg-purple-900/30 dark:text-purple-300">
+                  <Brain className="h-3 w-3" />
+                  AI Content
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -224,7 +250,7 @@ export const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, className }) 
                   className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-sm font-medium text-primary-700 ring-2 ring-white dark:bg-primary-900 dark:text-primary-300 dark:ring-dark-900"
                   style={{ zIndex: 10 - index }}
                 >
-                  {attendee.name.charAt(0)}
+                  {attendee.name ? attendee.name.charAt(0).toUpperCase() : '?'}
                 </div>
               ))}
               {attendees.length > 3 && (
@@ -396,7 +422,7 @@ export const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, className }) 
                   >
                     <div className="flex items-center gap-3">
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                        {attendee.name.charAt(0).toUpperCase()}
+                        {attendee.name ? attendee.name.charAt(0).toUpperCase() : '?'}
                       </div>
                       <div>
                         <p className="text-sm font-medium text-gray-900 dark:text-white">

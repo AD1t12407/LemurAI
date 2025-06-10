@@ -246,7 +246,7 @@ Best regards,
                         : 'bg-dark-100 text-dark-700 hover:bg-dark-200 dark:bg-dark-800 dark:text-dark-300 dark:hover:bg-dark-700'
                     )}
                   >
-                    {tone.charAt(0).toUpperCase() + tone.slice(1)}
+                    {tone ? (tone.charAt(0).toUpperCase() + tone.slice(1)) : 'Unknown'}
                   </button>
                 ))}
               </div>

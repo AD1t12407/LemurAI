@@ -157,7 +157,7 @@ export const ActionItemCard: React.FC<ActionItemCardProps> = ({
                 priorityBadgeColors[priority]
               )}>
                 {priority === 'high' && <AlertTriangle className="h-3 w-3" />}
-                {priority.charAt(0).toUpperCase() + priority.slice(1)} Priority
+                {priority ? (priority.charAt(0).toUpperCase() + priority.slice(1)) : 'Unknown'} Priority
               </span>
             </div>
           </div>
